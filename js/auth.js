@@ -186,7 +186,18 @@ async function handleRegister(e) {
   const password = document.getElementById('regPassword').value;
 
   try {
-    const { data, error } = await supabaseClient.auth.signUp({ email, password });
+    const { data, error } = await supabaseClient.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+          company_name: company,
+          phone: phone,
+          role: role
+        }
+      }
+    });
     if (error) throw error;
 
     const user = data.user;
