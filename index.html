@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sapori Piceni - Eccellenze Enogastronomiche Ascolane</title>
+
+<!-- FONTS & FONT AWESOME (nessuna dipendenza da Bootstrap) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<!-- FOGLIO DI STILE PERSONALIZZATO -->
+<link rel="stylesheet" href="css/style.css">
+
+<!-- Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<!-- BARRA INFORMATIVA SUPERIORE -->
+<div class="top-bar">
+  <div class="top-bar__inner">
+    <div class="brand-info"><i class="fa-solid fa-location-dot"></i> Via Piemonte 26, Ascoli Piceno (AP)</div>
+    <div class="user-info-bar" id="userInfoBar">
+      <!-- Gestito via JS: "Accedi/Registrati" oppure "Nome Utente / Logout" -->
+    </div>
+  </div>
+</div>
+
+<!-- HEADER E NAVIGAZIONE -->
+<header class="site-header">
+  <nav class="navbar">
+    <a href="#" class="brand" onclick="switchTab('home'); return false;">
+      <svg class="brand-logo-svg" viewBox="0 0 100 130" aria-hidden="true">
+        <rect x="5" y="5" width="90" height="120" rx="45" ry="45" stroke-width="4"/>
+        <ellipse cx="50" cy="45" rx="18" ry="14" transform="rotate(-15 50 45)" stroke-width="3"/>
+        <path d="M 30 85 C 40 70, 60 70, 70 85" stroke-width="3"/>
+        <path d="M 35 90 C 25 100, 45 105, 55 95 C 65 105, 80 95, 70 85" stroke-width="3"/>
+        <circle cx="30" cy="30" r="3" fill="currentColor" stroke="none"/>
+        <circle cx="70" cy="35" r="3" fill="currentColor" stroke="none"/>
+      </svg>
+      <span class="brand-text">
+        <span class="brand-title">Sapori Piceni</span>
+        <span class="brand-subtitle">Tradizione &amp; Innovazione</span>
+      </span>
+    </a>
+
+    <button class="nav-toggle" type="button" id="navToggle" aria-controls="mainNavCollapse" aria-expanded="false" aria-label="Apri il menu di navigazione">
+      <span></span><span></span><span></span>
+    </button>
+
+    <div class="nav-collapse" id="mainNavCollapse">
+      <ul class="nav-list" id="mainNav">
+        <li><a class="nav-link active" onclick="switchTab('home')" id="nav-home" role="button">Home</a></li>
+        <li><a class="nav-link" onclick="switchTab('shop')" id="nav-shop" role="button">Prodotti</a></li>
+        <li><a class="nav-link" onclick="switchTab('about')" id="nav-about" role="button">Chi Siamo</a></li>
+        <li><a class="nav-link" onclick="switchTab('contact')" id="nav-contact" role="button">Contatti</a></li>
+        <li id="nav-account-links"><!-- link dinamici in base al ruolo, gestiti via JS --></li>
+        <li class="nav-cart-item hidden" id="nav-cart-item">
+          <a class="btn btn-outline-gold nav-cart" onclick="switchTab('cart')" id="nav-cart" role="button">
+            <i class="fa-solid fa-cart-shopping"></i> Carrello <span class="cart-count" id="cartCnt">0</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+</header>
+
+<main class="main-container">
+
+  <!-- HOME PAGE PUBBLICA (HERO + VETRINA) -->
+  <section id="view-home" class="view-section active">
+    <div class="hero-banner">
+      <div class="hero-banner__content">
+        <h1>Le Eccellenze del Piceno</h1>
+        <p class="hero-lead">Olive Ascolane Classiche, Cremini fritti e fritti d'autore della tradizione picena.</p>
+        <p class="hero-award"><i class="fa-solid fa-award"></i> Premiato Top Italian Food 2022 &mdash; Gambero Rosso</p>
+        <button class="btn btn-gold btn-lg" onclick="switchTab('shop')"><i class="fa-solid fa-store"></i> Esplora il Catalogo</button>
+      </div>
+    </div>
+
+    <h2 class="section-title">Prodotti in Evidenza</h2>
+    <div id="homeProductGrid" class="product-grid"><p class="muted">Caricamento eccellenze...</p></div>
+  </section>
+
+  <!-- CATALOGO PRODOTTI (COMPLETO) -->
+  <section id="view-shop" class="view-section">
+    <h2 class="section-title">Tutti i Nostri Prodotti</h2>
+    <div id="productGrid" class="product-grid"><p class="muted">Caricamento prodotti dal database...</p></div>
+  </section>
+
+  <!-- CHI SIAMO -->
+  <section id="view-about" class="view-section">
+    <h2 class="section-title">La Nostra Storia</h2>
+    <div class="card pad">
+      <p class="mb-3">La <strong>Sapori Piceni</strong> nasce nel cuore di Ascoli Piceno dal desiderio di proporre al grande pubblico l'Oliva Ascolana come da ricetta di famiglia tramandata da madre in figlia fino ai nostri giorni. Gli artigiani della Sapori Piceni hanno poi lavorato con cura e dedizione, modificando le ricette, per trovare il giusto connubio tra tradizione e innovazione, per un gusto che non stanca mai!</p>
+      <p>Siamo orgogliosi di essere stati premiati da <em>Gambero Rosso</em> con il riconoscimento <strong>Top Italian Food 2022</strong>, garanzia della qualità delle nostre materie prime e dell'attenzione artigianale che riponiamo in ogni preparazione.</p>
+    </div>
+  </section>
+
+  <!-- CONTATTI -->
+  <section id="view-contact" class="view-section">
+    <h2 class="section-title">Contattaci</h2>
+    <div class="grid-2">
+      <div class="card pad">
+        <h3>Sede Operativa</h3>
+        <p class="mt-3"><strong>Indirizzo:</strong> Via Piemonte 26, 63100 Ascoli Piceno (AP)</p>
+        <p><strong>Email:</strong> commerciale@saporipiceni.com</p>
+        <p><strong>Telefono / WhatsApp:</strong> +39 371 329 8114</p>
+      </div>
+      <div class="card pad">
+        <h3 class="mb-3">Inviaci un messaggio</h3>
+        <form onsubmit="event.preventDefault(); alert('Messaggio inviato con successo!'); event.target.reset();">
+          <div class="field"><label class="form-label">Nome</label><input type="text" class="form-control" required></div>
+          <div class="field"><label class="form-label">Email</label><input type="email" class="form-control" required></div>
+          <div class="field"><label class="form-label">Messaggio</label><textarea class="form-control" rows="3" required></textarea></div>
+          <button type="submit" class="btn btn-green w-100">Invia Messaggio</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACCESSO / REGISTRAZIONE -->
+  <section id="view-auth" class="view-section">
+    <div class="grid-center">
+      <div class="card pad auth-card">
+        <h2 id="authTitle" class="section-title text-center">Accedi al Portale</h2>
+        <p id="authNotice" class="auth-notice hidden"></p>
+
+        <!-- FORM LOGIN -->
+        <form id="loginForm" onsubmit="handleLogin(event)">
+          <div class="field"><label class="form-label">Email</label><input type="email" id="loginEmail" class="form-control" required></div>
+          <div class="field"><label class="form-label">Password</label><input type="password" id="loginPassword" class="form-control" required></div>
+          <button type="submit" class="btn btn-green w-100 mb-3">Accedi</button>
+          <p class="text-center small">Non hai un account? <a role="button" class="link-accent" onclick="toggleAuthMode('register')">Registrati qui</a></p>
+        </form>
+
+        <!-- FORM REGISTRAZIONE -->
+        <form id="registerForm" class="hidden" onsubmit="handleRegister(event)">
+          <div class="field">
+            <label class="form-label">Tipo di Account</label>
+            <select id="regRole" class="form-control" onchange="toggleCompanyField(this.value)">
+              <option value="cliente">Cliente Privato / Ristorante</option>
+              <option value="fornitore">Fornitore / Produttore Locale</option>
+            </select>
+          </div>
+          <div class="field"><label class="form-label">Nome Completo / Referente</label><input type="text" id="regFullName" class="form-control" required></div>
+          <div id="companyGroup" class="field hidden"><label class="form-label">Ragione Sociale Azienda</label><input type="text" id="regCompany" class="form-control"></div>
+          <div class="field"><label class="form-label">Telefono</label><input type="tel" id="regPhone" class="form-control" required></div>
+          <div class="field"><label class="form-label">Email</label><input type="email" id="regEmail" class="form-control" required></div>
+          <div class="field"><label class="form-label">Password</label><input type="password" id="regPassword" class="form-control" required minlength="6"></div>
+          <button type="submit" class="btn btn-green w-100 mb-3">Crea Account</button>
+          <p class="text-center small">Hai già un account? <a role="button" class="link-accent" onclick="toggleAuthMode('login')">Accedi</a></p>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- CARRELLO / CHECKOUT (visibile solo dopo login) -->
+  <section id="view-cart" class="view-section">
+    <h2 class="section-title">Cassa &amp; Checkout</h2>
+    <div class="grid-2">
+      <div class="card pad">
+        <h3 class="mb-3">Riepilogo Prodotti</h3>
+        <div id="cartItems"></div>
+        <div class="cart-total-box">Totale: €<span id="cartTotal">0.00</span></div>
+      </div>
+      <div class="card pad">
+        <h3 class="mb-3">Conferma Spedizione</h3>
+        <form onsubmit="submitClientOrder(event)">
+          <div class="field"><label class="form-label">Indirizzo di Consegna</label><input type="text" id="shipAddress" class="form-control" placeholder="Via, Civico, Città" required></div>
+          <div class="field"><label class="form-label">Data Richiesta Consegna</label><input type="date" id="shipDate" class="form-control" required></div>
+          <div class="field"><label class="form-label">Note per la Consegna</label><textarea id="shipNotes" class="form-control" rows="3"></textarea></div>
+          <button type="submit" class="btn btn-gold w-100"><i class="fa-solid fa-check"></i> Invia Ordine Definitivo</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD CLIENTE -->
+  <section id="view-client-dashboard" class="view-section">
+    <h2 class="section-title">Area Personale Cliente</h2>
+    <div class="grid-2 grid-2--uneven">
+      <div class="card pad">
+        <h3 class="mb-3">I Miei Ordini</h3>
+        <div id="clientOrdersList">Caricamento ordini...</div>
+      </div>
+      <div class="card pad">
+        <h3 class="mb-3">Nuovo Ordine Rapido</h3>
+        <button class="btn btn-green w-100" onclick="switchTab('shop')"><i class="fa-solid fa-store"></i> Vai al Catalogo Prodotti</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD FORNITORE -->
+  <section id="view-supplier-dashboard" class="view-section">
+    <h2 class="section-title">Pannello Fornitore Materie Prime</h2>
+    <div class="grid-2">
+      <div class="card pad">
+        <h3 class="mb-3">Invia Proposta Fornitura</h3>
+        <form onsubmit="submitSupplierOffer(event)">
+          <div class="field"><label class="form-label">Materia Prima (es. Oliva Tenera Ascolana DOP)</label><input type="text" id="supItem" class="form-control" required></div>
+          <div class="field"><label class="form-label">Quantità Proposta</label><input type="text" id="supQty" class="form-control" placeholder="Es. 250 Kg" required></div>
+          <div class="field"><label class="form-label">Prezzo Totale (€)</label><input type="number" step="0.01" id="supPrice" class="form-control" required></div>
+          <button type="submit" class="btn btn-green w-100"><i class="fa-solid fa-paper-plane"></i> Invia Offerta all'Azienda</button>
+        </form>
+      </div>
+      <div class="card pad">
+        <h3 class="mb-3">Storico Offerte Inviate</h3>
+        <div id="supplierOffersList">Caricamento offerte...</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CHAT (ASSISTENZA) -->
+  <section id="view-chat" class="view-section">
+    <h2 class="section-title">Canale di Comunicazione Cloud</h2>
+    <div class="chat-container card">
+      <div class="chat-header" id="chatHeaderTitle">Chat Assistenza Sapori Piceni</div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <form class="chat-input-bar" onsubmit="sendChatMessage(event)">
+        <input type="text" id="chatInput" class="form-control" placeholder="Scrivi un messaggio..." required>
+        <button type="submit" class="btn btn-green"><i class="fa-solid fa-paper-plane"></i></button>
+      </form>
+    </div>
+  </section>
+
+  <!-- DASHBOARD ADMIN -->
+  <section id="view-admin" class="view-section">
+    <h2 class="section-title"><i class="fa-solid fa-user-shield"></i> Pannello di Controllo Executive</h2>
+
+    <div class="kpi-grid">
+      <div class="card pad text-center"><div class="kpi-value" id="kpiRevenue">€ 0</div><div class="kpi-label">Fatturato Totale</div></div>
+      <div class="card pad text-center"><div class="kpi-value" id="kpiOrders">0</div><div class="kpi-label">Ordini Ricevuti</div></div>
+      <div class="card pad text-center"><div class="kpi-value" id="kpiUsers">0</div><div class="kpi-label">Utenti Registrati</div></div>
+      <div class="card pad text-center"><div class="kpi-value" id="kpiOffers">0</div><div class="kpi-label">Proposte Fornitori</div></div>
+    </div>
+
+    <div class="tab-group" role="group">
+      <button class="tab-btn active" onclick="switchAdminSubTab('orders', event)">Gestione Ordini</button>
+      <button class="tab-btn" onclick="switchAdminSubTab('offers', event)">Offerte Fornitori</button>
+      <button class="tab-btn" onclick="switchAdminSubTab('users', event)">Anagrafica Utenti</button>
+      <button class="tab-btn" onclick="switchAdminSubTab('products', event)">Catalogo Prodotti</button>
+    </div>
+
+    <div id="admin-sub-orders" class="admin-sub-content card pad">
+      <h3 class="mb-3">Elaborazione Ordini Clienti</h3>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>ID Ordine</th><th>Data</th><th>Indirizzo</th><th>Totale</th><th>Stato</th><th>Azioni</th></tr></thead>
+          <tbody id="adminOrdersTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="admin-sub-offers" class="admin-sub-content card pad hidden">
+      <h3 class="mb-3">Offerte Ricevute dai Fornitori</h3>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Data</th><th>Materia Prima</th><th>Quantità</th><th>Prezzo Richiesto</th><th>Stato</th><th>Azioni</th></tr></thead>
+          <tbody id="adminOffersTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="admin-sub-users" class="admin-sub-content card pad hidden">
+      <h3 class="mb-3">Utenti &amp; Ruoli</h3>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Nome / Referente</th><th>Ragione Sociale</th><th>Telefono</th><th>Ruolo Attuale</th><th>Cambia Ruolo</th></tr></thead>
+          <tbody id="adminUsersTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="admin-sub-products" class="admin-sub-content card pad hidden">
+      <h3 class="mb-3">Aggiungi Prodotto al Catalogo</h3>
+      <form onsubmit="adminAddProduct(event)">
+        <div class="grid-2">
+          <div class="field"><label class="form-label">Nome Prodotto</label><input type="text" id="pName" class="form-control" required></div>
+          <div class="field"><label class="form-label">Prezzo (€)</label><input type="number" step="0.01" id="pPrice" class="form-control" required></div>
+        </div>
+        <div class="field"><label class="form-label">URL Immagine</label><input type="url" id="pImg" class="form-control" required></div>
+        <div class="field"><label class="form-label">Descrizione</label><textarea id="pDesc" class="form-control" rows="2" required></textarea></div>
+        <button type="submit" class="btn btn-green"><i class="fa-solid fa-plus"></i> Salva Prodotto nel DB</button>
+      </form>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <p>&copy; 2026 Sapori Piceni &mdash; Ascoli Piceno (AP). Tutti i diritti riservati.</p>
+</footer>
+
+<!-- JS APPLICAZIONE (nessuna dipendenza da Bootstrap) -->
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/admin.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
