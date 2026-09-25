@@ -200,7 +200,10 @@ async function handleRegister(e) {
           phone: phone,
           role: role
         }]);
-      if (profileError) console.error('Errore salvataggio profilo:', profileError);
+      if (profileError) {
+        console.error('Errore salvataggio profilo:', profileError);
+        throw profileError;
+      }
     }
 
     // Se la conferma via email è disabilitata, Supabase restituisce già una sessione attiva
