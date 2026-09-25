@@ -24,7 +24,8 @@ async function loadAdminData() {
   await Promise.all([
     loadAdminOrders(),
     loadAdminOffers(),
-    loadAdminUsers()
+    loadAdminUsers(),
+    loadSiteSettingsForm()
   ]);
 }
 
@@ -131,7 +132,12 @@ async function loadAdminUsers() {
       .order('full_name', { ascending: true });
     if (error) throw error;
 
-    document.getElementById('kpiUsers').innerText = users ? users.length : 0;
+    // Il conteggio esclude gli account admin (compreso l'admin attualmente collegato):
+    // il totale si divide solo tra Clienti e Fornitori realmente registrati.
+    const clientsCount = (users || []).filter(u => u.role === 'cliente').length;
+    const suppliersCount = (users || []).filter(u => u.role === 'fornitore').length;
+    document.getElementById('kpiClients').innerText = clientsCount;
+    document.getElementById('kpiSuppliers').innerText = suppliersCount;
 
     if (!users || users.length === 0) {
       tbody.innerHTML = '<tr><td colspan="5" class="muted">Nessun utente registrato.</td></tr>';
@@ -164,6 +170,56 @@ async function adminUpdateUserRole(userId, role) {
     if (error) throw error;
   } catch (err) {
     alert('Errore aggiornamento ruolo utente: ' + err.message);
+  }
+}
+
+// Precompila il form "Impostazioni Sito" con i valori salvati (o, in mancanza, con i testi attuali della pagina)
+async function loadSiteSettingsForm() {
+  const s = await fetchSiteSettings();
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val || '';
+  };
+  const currentText = (id) => {
+    const el = document.getElementById(id);
+    return el ? el.textContent.trim() : '';
+  };
+
+  set('setAddress', (s && s.address) || currentText('contactAddress'));
+  set('setPhone', (s && s.phone) || currentText('contactPhone'));
+  set('setEmail', (s && s.email) || currentText('contactEmail'));
+  set('setHeroTitle', (s && s.hero_title) || currentText('heroTitle'));
+  set('setHeroLead', (s && s.hero_subtitle) || currentText('heroLead'));
+  set('setHeroAward', (s && s.hero_award) || currentText('heroAwardText'));
+  set('setAboutP1', (s && s.about_p1) || currentText('aboutP1'));
+  set('setAboutP2', (s && s.about_p2) || currentText('aboutP2'));
+}
+
+// Salva le informazioni generali del sito (indirizzo, contatti, hero, chi siamo)
+async function adminSaveSiteSettings(e) {
+  e.preventDefault();
+  const payload = {
+    id: 1,
+    address: document.getElementById('setAddress').value.trim(),
+    phone: document.getElementById('setPhone').value.trim(),
+    email: document.getElementById('setEmail').value.trim(),
+    hero_title: document.getElementById('setHeroTitle').value.trim(),
+    hero_subtitle: document.getElementById('setHeroLead').value.trim(),
+    hero_award: document.getElementById('setHeroAward').value.trim(),
+    about_p1: document.getElementById('setAboutP1').value.trim(),
+    about_p2: document.getElementById('setAboutP2').value.trim()
+  };
+
+  try {
+    const { error } = await supabaseClient
+      .from('site_settings')
+      .upsert([payload], { onConflict: 'id' });
+    if (error) throw error;
+
+    alert('Informazioni del sito aggiornate con successo!');
+    await loadSiteSettings(); // riallinea anche le pagine pubbliche già in memoria
+  } catch (err) {
+    alert('Errore durante il salvataggio delle impostazioni: ' + err.message);
   }
 }
 

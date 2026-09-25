@@ -21,7 +21,7 @@
 <!-- BARRA INFORMATIVA SUPERIORE -->
 <div class="top-bar">
   <div class="top-bar__inner">
-    <div class="brand-info"><i class="fa-solid fa-location-dot"></i> Via Piemonte 26, Ascoli Piceno (AP)</div>
+    <div class="brand-info"><i class="fa-solid fa-location-dot"></i> <span id="topBarAddress">Via Piemonte 26, Ascoli Piceno (AP)</span></div>
     <div class="user-info-bar" id="userInfoBar">
       <!-- Gestito via JS: "Accedi/Registrati" oppure "Nome Utente / Logout" -->
     </div>
@@ -52,12 +52,12 @@
 
     <div class="nav-collapse" id="mainNavCollapse">
       <ul class="nav-list" id="mainNav">
-        <li><a class="nav-link active" onclick="switchTab('home')" id="nav-home" role="button">Home</a></li>
-        <li><a class="nav-link" onclick="switchTab('shop')" id="nav-shop" role="button">Prodotti</a></li>
-        <li><a class="nav-link" onclick="switchTab('about')" id="nav-about" role="button">Chi Siamo</a></li>
-        <li><a class="nav-link" onclick="switchTab('contact')" id="nav-contact" role="button">Contatti</a></li>
+        <li class="nav-public-item"><a class="nav-link active" onclick="switchTab('home')" id="nav-home" role="button">Home</a></li>
+        <li class="nav-public-item"><a class="nav-link" onclick="switchTab('shop')" id="nav-shop" role="button">Prodotti</a></li>
+        <li class="nav-public-item"><a class="nav-link" onclick="switchTab('about')" id="nav-about" role="button">Chi Siamo</a></li>
+        <li class="nav-public-item"><a class="nav-link" onclick="switchTab('contact')" id="nav-contact" role="button">Contatti</a></li>
         <li id="nav-account-links"><!-- link dinamici in base al ruolo, gestiti via JS --></li>
-        <li class="nav-cart-item hidden" id="nav-cart-item">
+        <li class="nav-cart-item nav-public-item hidden" id="nav-cart-item">
           <a class="btn btn-outline-gold nav-cart" onclick="switchTab('cart')" id="nav-cart" role="button">
             <i class="fa-solid fa-cart-shopping"></i> Carrello <span class="cart-count" id="cartCnt">0</span>
           </a>
@@ -73,9 +73,9 @@
   <section id="view-home" class="view-section active">
     <div class="hero-banner">
       <div class="hero-banner__content">
-        <h1>Le Eccellenze del Piceno</h1>
-        <p class="hero-lead">Olive Ascolane Classiche, Cremini fritti e fritti d'autore della tradizione picena.</p>
-        <p class="hero-award"><i class="fa-solid fa-award"></i> Premiato Top Italian Food 2022 &mdash; Gambero Rosso</p>
+        <h1 id="heroTitle">Le Eccellenze del Piceno</h1>
+        <p class="hero-lead" id="heroLead">Olive Ascolane Classiche, Cremini fritti e fritti d'autore della tradizione picena.</p>
+        <p class="hero-award" id="heroAward"><i class="fa-solid fa-award"></i> <span id="heroAwardText">Premiato Top Italian Food 2022 &mdash; Gambero Rosso</span></p>
         <button class="btn btn-gold btn-lg" onclick="switchTab('shop')"><i class="fa-solid fa-store"></i> Esplora il Catalogo</button>
       </div>
     </div>
@@ -94,8 +94,8 @@
   <section id="view-about" class="view-section">
     <h2 class="section-title">La Nostra Storia</h2>
     <div class="card pad">
-      <p class="mb-3">La <strong>Sapori Piceni</strong> nasce nel cuore di Ascoli Piceno dal desiderio di proporre al grande pubblico l'Oliva Ascolana come da ricetta di famiglia tramandata da madre in figlia fino ai nostri giorni. Gli artigiani della Sapori Piceni hanno poi lavorato con cura e dedizione, modificando le ricette, per trovare il giusto connubio tra tradizione e innovazione, per un gusto che non stanca mai!</p>
-      <p>Siamo orgogliosi di essere stati premiati da <em>Gambero Rosso</em> con il riconoscimento <strong>Top Italian Food 2022</strong>, garanzia della qualità delle nostre materie prime e dell'attenzione artigianale che riponiamo in ogni preparazione.</p>
+      <p class="mb-3" id="aboutP1">La <strong>Sapori Piceni</strong> nasce nel cuore di Ascoli Piceno dal desiderio di proporre al grande pubblico l'Oliva Ascolana come da ricetta di famiglia tramandata da madre in figlia fino ai nostri giorni. Gli artigiani della Sapori Piceni hanno poi lavorato con cura e dedizione, modificando le ricette, per trovare il giusto connubio tra tradizione e innovazione, per un gusto che non stanca mai!</p>
+      <p id="aboutP2">Siamo orgogliosi di essere stati premiati da <em>Gambero Rosso</em> con il riconoscimento <strong>Top Italian Food 2022</strong>, garanzia della qualità delle nostre materie prime e dell'attenzione artigianale che riponiamo in ogni preparazione.</p>
     </div>
   </section>
 
@@ -105,9 +105,9 @@
     <div class="grid-2">
       <div class="card pad">
         <h3>Sede Operativa</h3>
-        <p class="mt-3"><strong>Indirizzo:</strong> Via Piemonte 26, 63100 Ascoli Piceno (AP)</p>
-        <p><strong>Email:</strong> commerciale@saporipiceni.com</p>
-        <p><strong>Telefono / WhatsApp:</strong> +39 371 329 8114</p>
+        <p class="mt-3"><strong>Indirizzo:</strong> <span id="contactAddress">Via Piemonte 26, 63100 Ascoli Piceno (AP)</span></p>
+        <p><strong>Email:</strong> <span id="contactEmail">commerciale@saporipiceni.com</span></p>
+        <p><strong>Telefono / WhatsApp:</strong> <span id="contactPhone">+39 371 329 8114</span></p>
       </div>
       <div class="card pad">
         <h3 class="mb-3">Inviaci un messaggio</h3>
@@ -233,7 +233,8 @@
     <div class="kpi-grid">
       <div class="card pad text-center"><div class="kpi-value" id="kpiRevenue">€ 0</div><div class="kpi-label">Fatturato Totale</div></div>
       <div class="card pad text-center"><div class="kpi-value" id="kpiOrders">0</div><div class="kpi-label">Ordini Ricevuti</div></div>
-      <div class="card pad text-center"><div class="kpi-value" id="kpiUsers">0</div><div class="kpi-label">Utenti Registrati</div></div>
+      <div class="card pad text-center"><div class="kpi-value" id="kpiClients">0</div><div class="kpi-label">Clienti Registrati</div></div>
+      <div class="card pad text-center"><div class="kpi-value" id="kpiSuppliers">0</div><div class="kpi-label">Fornitori Registrati</div></div>
       <div class="card pad text-center"><div class="kpi-value" id="kpiOffers">0</div><div class="kpi-label">Proposte Fornitori</div></div>
     </div>
 
@@ -242,6 +243,7 @@
       <button class="tab-btn" onclick="switchAdminSubTab('offers', event)">Offerte Fornitori</button>
       <button class="tab-btn" onclick="switchAdminSubTab('users', event)">Anagrafica Utenti</button>
       <button class="tab-btn" onclick="switchAdminSubTab('products', event)">Catalogo Prodotti</button>
+      <button class="tab-btn" onclick="switchAdminSubTab('settings', event)">Impostazioni Sito</button>
     </div>
 
     <div id="admin-sub-orders" class="admin-sub-content card pad">
@@ -284,6 +286,26 @@
         <div class="field"><label class="form-label">URL Immagine</label><input type="url" id="pImg" class="form-control" required></div>
         <div class="field"><label class="form-label">Descrizione</label><textarea id="pDesc" class="form-control" rows="2" required></textarea></div>
         <button type="submit" class="btn btn-green"><i class="fa-solid fa-plus"></i> Salva Prodotto nel DB</button>
+      </form>
+    </div>
+
+    <div id="admin-sub-settings" class="admin-sub-content card pad hidden">
+      <h3 class="mb-3">Informazioni Generali del Sito</h3>
+      <p class="muted mb-3">Questi contenuti vengono mostrati a tutti i visitatori in Home, Chi Siamo e Contatti.</p>
+      <form onsubmit="adminSaveSiteSettings(event)">
+        <div class="grid-2">
+          <div class="field"><label class="form-label">Indirizzo</label><input type="text" id="setAddress" class="form-control" required></div>
+          <div class="field"><label class="form-label">Telefono / WhatsApp</label><input type="text" id="setPhone" class="form-control" required></div>
+        </div>
+        <div class="field"><label class="form-label">Email di contatto</label><input type="email" id="setEmail" class="form-control" required></div>
+        <hr class="settings-divider">
+        <div class="field"><label class="form-label">Titolo Hero (Home)</label><input type="text" id="setHeroTitle" class="form-control" required></div>
+        <div class="field"><label class="form-label">Sottotitolo Hero</label><input type="text" id="setHeroLead" class="form-control" required></div>
+        <div class="field"><label class="form-label">Testo premio / badge Hero</label><input type="text" id="setHeroAward" class="form-control" required></div>
+        <hr class="settings-divider">
+        <div class="field"><label class="form-label">Testo "Chi Siamo" — Paragrafo 1</label><textarea id="setAboutP1" class="form-control" rows="3" required></textarea></div>
+        <div class="field"><label class="form-label">Testo "Chi Siamo" — Paragrafo 2</label><textarea id="setAboutP2" class="form-control" rows="3" required></textarea></div>
+        <button type="submit" class="btn btn-green"><i class="fa-solid fa-floppy-disk"></i> Salva Informazioni Sito</button>
       </form>
     </div>
   </section>

@@ -8,11 +8,15 @@ var cart = window.cart;
 // Viste accessibili solo agli utenti registrati e loggati
 const RESTRICTED_VIEWS = ['cart', 'client-dashboard', 'supplier-dashboard', 'admin', 'chat'];
 
-document.addEventListener('DOMContentLoaded', () => {
-  checkUserSession();
-  loadProducts();
+document.addEventListener('DOMContentLoaded', async () => {
   setupNavToggle();
-  switchTab('home');
+  loadSiteSettings();
+  loadProducts();
+  await checkUserSession();
+
+  // Un admin atterra sempre sulla propria dashboard, mai sulle pagine pubbliche
+  const role = currentProfile ? currentProfile.role : null;
+  switchTab(role === 'admin' ? 'admin' : 'home');
 });
 
 // MENU MOBILE (sostituisce bootstrap.Collapse)
@@ -49,6 +53,11 @@ function switchTab(viewId) {
     return;
   }
 
+  // L'admin ha accesso solo alla propria dashboard: nessun'altra vista è raggiungibile
+  if (currentProfile && currentProfile.role === 'admin' && viewId !== 'admin') {
+    viewId = 'admin';
+  }
+
   document.querySelectorAll('.view-section').forEach(sec => {
     sec.classList.remove('active');
   });
@@ -73,6 +82,45 @@ function switchTab(viewId) {
   if (viewId === 'chat') loadChatMessages();
 
   closeMobileNav();
+}
+
+// INFORMAZIONI GENERALI DEL SITO (gestibili dall'admin, visibili a tutti)
+let siteSettings = null;
+
+async function fetchSiteSettings() {
+  try {
+    const { data, error } = await supabaseClient
+      .from('site_settings')
+      .select('*')
+      .eq('id', 1)
+      .single();
+    if (error) throw error;
+    siteSettings = data;
+    return data;
+  } catch (err) {
+    // Nessuna riga presente o tabella non ancora creata: si mantengono i testi predefiniti
+    return null;
+  }
+}
+
+async function loadSiteSettings() {
+  const s = await fetchSiteSettings();
+  if (!s) return;
+
+  const setText = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val) el.textContent = val;
+  };
+
+  setText('topBarAddress', s.address);
+  setText('contactAddress', s.address);
+  setText('contactEmail', s.email);
+  setText('contactPhone', s.phone);
+  setText('heroTitle', s.hero_title);
+  setText('heroLead', s.hero_subtitle);
+  setText('heroAwardText', s.hero_award);
+  setText('aboutP1', s.about_p1);
+  setText('aboutP2', s.about_p2);
 }
 
 // CARICAMENTO PRODOTTI DA SUPABASE

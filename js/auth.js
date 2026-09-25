@@ -47,10 +47,12 @@ function applyAuthUI() {
   const userInfoBar = document.getElementById('userInfoBar');
   const cartNavItem = document.getElementById('nav-cart-item');
   const accountLinks = document.getElementById('nav-account-links');
+  const publicNavItems = document.querySelectorAll('.nav-public-item');
 
   if (currentUser) {
     const role = currentProfile ? currentProfile.role : 'cliente';
     const name = (currentProfile && currentProfile.full_name) ? currentProfile.full_name : currentUser.email;
+    const isAdmin = role === 'admin';
 
     // Barra utente: nome + logout
     userInfoBar.innerHTML = `
@@ -59,20 +61,24 @@ function applyAuthUI() {
       <a role="button" onclick="handleLogout()"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
     `;
 
-    // Il carrello diventa visibile solo per gli utenti registrati e loggati
-    cartNavItem.classList.remove('hidden');
-
-    // Link dedicati al ruolo dell'utente
-    let links = '';
-    if (role === 'admin') {
-      links += `<a class="nav-link" onclick="switchTab('admin')" id="nav-admin" role="button"><i class="fa-solid fa-user-shield"></i> Admin</a>`;
-    } else if (role === 'fornitore') {
-      links += `<a class="nav-link" onclick="switchTab('supplier-dashboard')" id="nav-supplier" role="button">Area Fornitore</a>`;
+    if (isAdmin) {
+      // L'admin vede solo la propria dashboard: niente Home/Prodotti/Chi Siamo/Contatti/Carrello/Assistenza
+      publicNavItems.forEach(el => el.classList.add('hidden'));
+      accountLinks.innerHTML = `<a class="nav-link" onclick="switchTab('admin')" id="nav-admin" role="button"><i class="fa-solid fa-user-shield"></i> Dashboard Admin</a>`;
     } else {
-      links += `<a class="nav-link" onclick="switchTab('client-dashboard')" id="nav-client" role="button">Area Personale</a>`;
+      // Cliente/Fornitore: navigazione pubblica visibile, carrello visibile
+      publicNavItems.forEach(el => el.classList.remove('hidden'));
+      cartNavItem.classList.remove('hidden');
+
+      let links = '';
+      if (role === 'fornitore') {
+        links += `<a class="nav-link" onclick="switchTab('supplier-dashboard')" id="nav-supplier" role="button">Area Fornitore</a>`;
+      } else {
+        links += `<a class="nav-link" onclick="switchTab('client-dashboard')" id="nav-client" role="button">Area Personale</a>`;
+      }
+      links += `<a class="nav-link" onclick="switchTab('chat')" id="nav-chat" role="button"><i class="fa-solid fa-comments"></i> Assistenza</a>`;
+      accountLinks.innerHTML = links;
     }
-    links += `<a class="nav-link" onclick="switchTab('chat')" id="nav-chat" role="button"><i class="fa-solid fa-comments"></i> Assistenza</a>`;
-    accountLinks.innerHTML = links;
 
   } else {
     // Utente non autenticato: pulsante Accedi/Registrati sempre visibile
@@ -82,7 +88,8 @@ function applyAuthUI() {
       <a role="button" class="register-link" onclick="switchTab('auth'); toggleAuthMode('register');"><i class="fa-solid fa-user-plus"></i> Registrati</a>
     `;
 
-    // Il carrello resta nascosto agli utenti non registrati
+    // Link pubblici sempre visibili per i visitatori; il carrello resta nascosto ai non registrati
+    publicNavItems.forEach(el => el.classList.remove('hidden'));
     cartNavItem.classList.add('hidden');
     accountLinks.innerHTML = '';
 
@@ -93,6 +100,13 @@ function applyAuthUI() {
       switchTab('home');
     }
   }
+}
+
+// Dopo login/registrazione: l'admin va sempre dritto alla propria dashboard,
+// gli altri ruoli atterrano in Home.
+function postLoginRedirect() {
+  const role = currentProfile ? currentProfile.role : 'cliente';
+  switchTab(role === 'admin' ? 'admin' : 'home');
 }
 
 function escapeHtml(str) {
@@ -155,7 +169,7 @@ async function handleLogin(e) {
     applyAuthUI();
 
     document.getElementById('loginForm').reset();
-    switchTab('home');
+    postLoginRedirect();
   } catch (err) {
     showAuthNotice('Errore di accesso: ' + err.message);
   }
@@ -195,7 +209,7 @@ async function handleRegister(e) {
       await loadCurrentProfile(currentUser);
       applyAuthUI();
       document.getElementById('registerForm').reset();
-      switchTab('home');
+      postLoginRedirect();
     } else {
       document.getElementById('registerForm').reset();
       toggleAuthMode('login');

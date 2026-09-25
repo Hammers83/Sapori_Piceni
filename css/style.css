@@ -333,9 +333,14 @@ select.form-control { appearance: none; background: #fff url('data:image/svg+xml
 /* =============== KPI / ADMIN =============== */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
+}
+.settings-divider {
+  border: none;
+  border-top: 1px solid var(--sp-border);
+  margin: 20px 0;
 }
 .kpi-value { font-size: 1.5rem; font-weight: 700; color: var(--sp-forest-light); font-family: 'Cinzel', serif; }
 .kpi-label { color: var(--muted); font-size: 0.82rem; margin-top: 4px; }
