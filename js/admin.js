@@ -1,27 +1,25 @@
 // js/admin.js
 
+const ORDER_STATUSES = Object.freeze(['In Attesa', 'In Lavorazione', 'Spedito', 'Consegnato', 'Annullato']);
+const OFFER_STATUSES = Object.freeze(['In Revisione', 'Accettata', 'Rifiutata']);
+
 function switchAdminSubTab(subTabId, evt) {
   document.querySelectorAll('.admin-sub-content').forEach(el => {
-    el.classList.add('hidden');
+    el.classList.toggle('hidden', el.id !== 'admin-sub-' + subTabId);
   });
 
-  const target = document.getElementById('admin-sub-' + subTabId);
-  if (target) target.classList.remove('hidden');
-
   document.querySelectorAll('.tab-group .tab-btn').forEach(btn => btn.classList.remove('active'));
-  if (evt && evt.target) {
-    evt.target.classList.add('active');
-  }
+  evt?.currentTarget?.classList.add('active');
 }
 
-// Carica tutti i dati della dashboard executive: KPI + tabelle
 async function loadAdminData() {
-  if (!currentProfile || currentProfile.role !== 'admin') {
-    document.getElementById('view-admin').innerHTML = '<p class="muted">Accesso riservato agli amministratori.</p>';
+  if (currentProfile?.role !== 'admin') {
+    const view = document.getElementById('view-admin');
+    if (view) view.innerHTML = '<p class="muted">Accesso riservato agli amministratori.</p>';
     return;
   }
 
-  await Promise.all([
+  await Promise.allSettled([
     loadAdminOrders(),
     loadAdminOffers(),
     loadAdminUsers(),
@@ -29,219 +27,296 @@ async function loadAdminData() {
   ]);
 }
 
+function setText(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.textContent = value;
+}
+
+function renderOptions(values, selected) {
+  return values.map(value =>
+    `<option value="${escapeHtml(value)}" ${value === selected ? 'selected' : ''}>${escapeHtml(value)}</option>`
+  ).join('');
+}
+
 async function loadAdminOrders() {
   const tbody = document.getElementById('adminOrdersTable');
+  if (!tbody) return;
+
   try {
     const { data: orders, error } = await supabaseClient
       .from('orders')
-      .select('*')
+      .select('id,created_at,shipping_address,total_price,status')
       .order('created_at', { ascending: false });
+
     if (error) throw error;
 
-    document.getElementById('kpiOrders').innerText = orders ? orders.length : 0;
-    const revenue = (orders || []).reduce((sum, o) => sum + parseFloat(o.total_price || 0), 0);
-    document.getElementById('kpiRevenue').innerText = '€ ' + revenue.toFixed(2);
+    setText('kpiOrders', orders?.length || 0);
+    const revenue = (orders || []).reduce((sum, order) => sum + Number(order.total_price || 0), 0);
+    setText('kpiRevenue', '€ ' + revenue.toFixed(2));
 
-    if (!orders || orders.length === 0) {
+    if (!orders?.length) {
       tbody.innerHTML = '<tr><td colspan="6" class="muted">Nessun ordine ricevuto.</td></tr>';
       return;
     }
 
-    tbody.innerHTML = orders.map(o => `
-      <tr>
-        <td>#${String(o.id).slice(0, 8)}</td>
-        <td>${o.created_at ? new Date(o.created_at).toLocaleDateString('it-IT') : '—'}</td>
-        <td>${escapeHtml(o.shipping_address || '')}</td>
-        <td>€ ${parseFloat(o.total_price || 0).toFixed(2)}</td>
-        <td>${escapeHtml(o.status || 'In Attesa')}</td>
-        <td>
-          <select class="form-control" onchange="adminUpdateOrderStatus('${o.id}', this.value)">
-            ${['In Attesa', 'In Lavorazione', 'Spedito', 'Consegnato', 'Annullato'].map(s =>
-              `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}
-          </select>
-        </td>
-      </tr>
-    `).join('');
-  } catch (err) {
+    tbody.innerHTML = orders.map(order => {
+      const id = escapeHtml(String(order.id));
+      const status = order.status || ORDER_STATUSES[0];
+
+      return `
+        <tr>
+          <td>#${escapeHtml(String(order.id).slice(0, 8))}</td>
+          <td>${order.created_at ? new Date(order.created_at).toLocaleDateString('it-IT') : '—'}</td>
+          <td>${escapeHtml(order.shipping_address || '')}</td>
+          <td>€ ${Number(order.total_price || 0).toFixed(2)}</td>
+          <td>${escapeHtml(status)}</td>
+          <td>
+            <select class="form-control" data-order-id="${id}" onchange="adminUpdateOrderStatus(this.dataset.orderId, this.value)">
+              ${renderOptions(ORDER_STATUSES, status)}
+            </select>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (error) {
+    console.error('Errore caricamento ordini admin:', error);
     tbody.innerHTML = '<tr><td colspan="6" class="muted">Errore nel caricamento ordini.</td></tr>';
-    console.error(err);
   }
 }
 
 async function adminUpdateOrderStatus(orderId, status) {
+  if (!ORDER_STATUSES.includes(status)) return;
+
   try {
-    const { error } = await supabaseClient.from('orders').update({ status }).eq('id', orderId);
+    const { error } = await supabaseClient
+      .from('orders')
+      .update({ status })
+      .eq('id', orderId);
+
     if (error) throw error;
-  } catch (err) {
-    alert('Errore aggiornamento stato ordine: ' + err.message);
+  } catch (error) {
+    console.error('Errore aggiornamento stato ordine:', error);
+    alert('Errore aggiornamento stato ordine: ' + error.message);
+    await loadAdminOrders();
   }
 }
 
 async function loadAdminOffers() {
   const tbody = document.getElementById('adminOffersTable');
+  if (!tbody) return;
+
   try {
     const { data: offers, error } = await supabaseClient
       .from('supplier_offers')
-      .select('*')
+      .select('id,created_at,item_name,quantity,price_total,status')
       .order('created_at', { ascending: false });
+
     if (error) throw error;
 
-    document.getElementById('kpiOffers').innerText = offers ? offers.length : 0;
+    setText('kpiOffers', offers?.length || 0);
 
-    if (!offers || offers.length === 0) {
+    if (!offers?.length) {
       tbody.innerHTML = '<tr><td colspan="6" class="muted">Nessuna offerta ricevuta.</td></tr>';
       return;
     }
 
-    tbody.innerHTML = offers.map(o => `
-      <tr>
-        <td>${o.created_at ? new Date(o.created_at).toLocaleDateString('it-IT') : '—'}</td>
-        <td>${escapeHtml(o.item_name || '')}</td>
-        <td>${escapeHtml(o.quantity || '')}</td>
-        <td>€ ${parseFloat(o.price_total || 0).toFixed(2)}</td>
-        <td>${escapeHtml(o.status || 'In Revisione')}</td>
-        <td>
-          <select class="form-control" onchange="adminUpdateOfferStatus('${o.id}', this.value)">
-            ${['In Revisione', 'Accettata', 'Rifiutata'].map(s =>
-              `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}
-          </select>
-        </td>
-      </tr>
-    `).join('');
-  } catch (err) {
+    tbody.innerHTML = offers.map(offer => {
+      const id = escapeHtml(String(offer.id));
+      const status = offer.status || OFFER_STATUSES[0];
+
+      return `
+        <tr>
+          <td>${offer.created_at ? new Date(offer.created_at).toLocaleDateString('it-IT') : '—'}</td>
+          <td>${escapeHtml(offer.item_name || '')}</td>
+          <td>${escapeHtml(offer.quantity || '')}</td>
+          <td>€ ${Number(offer.price_total || 0).toFixed(2)}</td>
+          <td>${escapeHtml(status)}</td>
+          <td>
+            <select class="form-control" data-offer-id="${id}" onchange="adminUpdateOfferStatus(this.dataset.offerId, this.value)">
+              ${renderOptions(OFFER_STATUSES, status)}
+            </select>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (error) {
+    console.error('Errore caricamento offerte admin:', error);
     tbody.innerHTML = '<tr><td colspan="6" class="muted">Errore nel caricamento offerte.</td></tr>';
-    console.error(err);
   }
 }
 
 async function adminUpdateOfferStatus(offerId, status) {
+  if (!OFFER_STATUSES.includes(status)) return;
+
   try {
-    const { error } = await supabaseClient.from('supplier_offers').update({ status }).eq('id', offerId);
+    const { error } = await supabaseClient
+      .from('supplier_offers')
+      .update({ status })
+      .eq('id', offerId);
+
     if (error) throw error;
-  } catch (err) {
-    alert('Errore aggiornamento stato offerta: ' + err.message);
+  } catch (error) {
+    console.error('Errore aggiornamento stato offerta:', error);
+    alert('Errore aggiornamento stato offerta: ' + error.message);
+    await loadAdminOffers();
   }
 }
 
 async function loadAdminUsers() {
   const tbody = document.getElementById('adminUsersTable');
+  if (!tbody) return;
+
   try {
     const { data: users, error } = await supabaseClient
       .from('profiles')
-      .select('*')
+      .select('id,full_name,company_name,phone,role')
       .order('full_name', { ascending: true });
+
     if (error) throw error;
 
-    // Il conteggio esclude gli account admin (compreso l'admin attualmente collegato):
-    // il totale si divide solo tra Clienti e Fornitori realmente registrati.
-    const clientsCount = (users || []).filter(u => u.role === 'cliente').length;
-    const suppliersCount = (users || []).filter(u => u.role === 'fornitore').length;
-    document.getElementById('kpiClients').innerText = clientsCount;
-    document.getElementById('kpiSuppliers').innerText = suppliersCount;
+    setText('kpiClients', (users || []).filter(user => user.role === 'cliente').length);
+    setText('kpiSuppliers', (users || []).filter(user => user.role === 'fornitore').length);
 
-    if (!users || users.length === 0) {
+    if (!users?.length) {
       tbody.innerHTML = '<tr><td colspan="5" class="muted">Nessun utente registrato.</td></tr>';
       return;
     }
 
-    tbody.innerHTML = users.map(u => `
-      <tr>
-        <td>${escapeHtml(u.full_name || '')}</td>
-        <td>${escapeHtml(u.company_name || '—')}</td>
-        <td>${escapeHtml(u.phone || '—')}</td>
-        <td>${escapeHtml(u.role || 'cliente')}</td>
-        <td>
-          <select class="form-control" onchange="adminUpdateUserRole('${u.id}', this.value)">
-            ${['cliente', 'fornitore', 'admin'].map(r =>
-              `<option value="${r}" ${r === u.role ? 'selected' : ''}>${r}</option>`).join('')}
-          </select>
-        </td>
-      </tr>
-    `).join('');
-  } catch (err) {
+    tbody.innerHTML = users.map(user => {
+      const id = escapeHtml(String(user.id));
+      const role = APP_CONFIG.allowedRoles.includes(user.role) ? user.role : 'cliente';
+
+      return `
+        <tr>
+          <td>${escapeHtml(user.full_name || '')}</td>
+          <td>${escapeHtml(user.company_name || '—')}</td>
+          <td>${escapeHtml(user.phone || '—')}</td>
+          <td>${escapeHtml(role)}</td>
+          <td>
+            <select class="form-control" data-user-id="${id}" onchange="adminUpdateUserRole(this.dataset.userId, this.value)">
+              ${renderOptions(APP_CONFIG.allowedRoles, role)}
+            </select>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (error) {
+    console.error('Errore caricamento utenti admin:', error);
     tbody.innerHTML = '<tr><td colspan="5" class="muted">Errore nel caricamento utenti.</td></tr>';
-    console.error(err);
   }
 }
 
 async function adminUpdateUserRole(userId, role) {
+  if (!APP_CONFIG.allowedRoles.includes(role)) return;
+
+  // Nota: questo controllo UI non sostituisce una policy RLS/server-side.
   try {
-    const { error } = await supabaseClient.from('profiles').update({ role }).eq('id', userId);
+    const { error } = await supabaseClient
+      .from('profiles')
+      .update({ role })
+      .eq('id', userId);
+
     if (error) throw error;
-  } catch (err) {
-    alert('Errore aggiornamento ruolo utente: ' + err.message);
+    await loadAdminUsers();
+  } catch (error) {
+    console.error('Errore aggiornamento ruolo:', error);
+    alert('Errore aggiornamento ruolo utente: ' + error.message);
+    await loadAdminUsers();
   }
 }
 
-// Precompila il form "Impostazioni Sito" con i valori salvati (o, in mancanza, con i testi attuali della pagina)
 async function loadSiteSettingsForm() {
-  const s = await fetchSiteSettings();
-  const set = (id, val) => {
-    const el = document.getElementById(id);
-    if (el) el.value = val || '';
-  };
-  const currentText = (id) => {
-    const el = document.getElementById(id);
-    return el ? el.textContent.trim() : '';
+  const settings = await fetchSiteSettings();
+  const currentText = id => document.getElementById(id)?.textContent.trim() || '';
+
+  const values = {
+    setAddress: settings?.address || currentText('contactAddress'),
+    setPhone: settings?.phone || currentText('contactPhone'),
+    setEmail: settings?.email || currentText('contactEmail'),
+    setHeroTitle: settings?.hero_title || currentText('heroTitle'),
+    setHeroLead: settings?.hero_subtitle || currentText('heroLead'),
+    setHeroAward: settings?.hero_award || currentText('heroAwardText'),
+    setAboutP1: settings?.about_p1 || currentText('aboutP1'),
+    setAboutP2: settings?.about_p2 || currentText('aboutP2')
   };
 
-  set('setAddress', (s && s.address) || currentText('contactAddress'));
-  set('setPhone', (s && s.phone) || currentText('contactPhone'));
-  set('setEmail', (s && s.email) || currentText('contactEmail'));
-  set('setHeroTitle', (s && s.hero_title) || currentText('heroTitle'));
-  set('setHeroLead', (s && s.hero_subtitle) || currentText('heroLead'));
-  set('setHeroAward', (s && s.hero_award) || currentText('heroAwardText'));
-  set('setAboutP1', (s && s.about_p1) || currentText('aboutP1'));
-  set('setAboutP2', (s && s.about_p2) || currentText('aboutP2'));
+  Object.entries(values).forEach(([id, value]) => {
+    const element = document.getElementById(id);
+    if (element) element.value = value;
+  });
 }
 
-// Salva le informazioni generali del sito (indirizzo, contatti, hero, chi siamo)
 async function adminSaveSiteSettings(e) {
   e.preventDefault();
+
   const payload = {
     id: 1,
-    address: document.getElementById('setAddress').value.trim(),
-    phone: document.getElementById('setPhone').value.trim(),
-    email: document.getElementById('setEmail').value.trim(),
-    hero_title: document.getElementById('setHeroTitle').value.trim(),
-    hero_subtitle: document.getElementById('setHeroLead').value.trim(),
-    hero_award: document.getElementById('setHeroAward').value.trim(),
-    about_p1: document.getElementById('setAboutP1').value.trim(),
-    about_p2: document.getElementById('setAboutP2').value.trim()
+    address: document.getElementById('setAddress')?.value.trim(),
+    phone: document.getElementById('setPhone')?.value.trim(),
+    email: document.getElementById('setEmail')?.value.trim(),
+    hero_title: document.getElementById('setHeroTitle')?.value.trim(),
+    hero_subtitle: document.getElementById('setHeroLead')?.value.trim(),
+    hero_award: document.getElementById('setHeroAward')?.value.trim(),
+    about_p1: document.getElementById('setAboutP1')?.value.trim(),
+    about_p2: document.getElementById('setAboutP2')?.value.trim()
   };
+
+  if (Object.values(payload).some(value => value === undefined || value === '')) {
+    alert('Compila tutti i campi delle impostazioni.');
+    return;
+  }
 
   try {
     const { error } = await supabaseClient
       .from('site_settings')
       .upsert([payload], { onConflict: 'id' });
+
     if (error) throw error;
 
     alert('Informazioni del sito aggiornate con successo!');
-    await loadSiteSettings(); // riallinea anche le pagine pubbliche già in memoria
-  } catch (err) {
-    alert('Errore durante il salvataggio delle impostazioni: ' + err.message);
+    await loadSiteSettings();
+    await loadSiteSettingsForm();
+  } catch (error) {
+    console.error('Errore salvataggio impostazioni:', error);
+    alert('Errore durante il salvataggio delle impostazioni: ' + error.message);
   }
 }
 
 async function adminAddProduct(e) {
   e.preventDefault();
-  const name = document.getElementById('pName').value;
-  const price = parseFloat(document.getElementById('pPrice').value);
-  const image_url = document.getElementById('pImg').value;
-  const description = document.getElementById('pDesc').value;
+
+  const name = document.getElementById('pName')?.value.trim();
+  const price = Number(document.getElementById('pPrice')?.value);
+  const imageUrl = document.getElementById('pImg')?.value.trim();
+  const description = document.getElementById('pDesc')?.value.trim();
+
+  if (!name || !description || !Number.isFinite(price) || price < 0) {
+    alert('Controlla nome, prezzo e descrizione del prodotto.');
+    return;
+  }
+
+  if (imageUrl && !/^https?:\/\//i.test(imageUrl)) {
+    alert('L\'URL immagine deve iniziare con http:// o https://.');
+    return;
+  }
 
   try {
     const { error } = await supabaseClient
       .from('products')
-      .insert([{ name, price, image_url, description }]);
+      .insert([{
+        name,
+        price: Number(price.toFixed(2)),
+        image_url: imageUrl || null,
+        description
+      }]);
 
     if (error) throw error;
 
     alert('Prodotto aggiunto con successo al database!');
-    document.querySelector('#admin-sub-products form').reset();
-
-    if (typeof loadProducts === 'function') loadProducts();
-  } catch (err) {
-    alert('Errore durante l\'aggiunta del prodotto: ' + err.message);
+    document.querySelector('#admin-sub-products form')?.reset();
+    await loadProducts();
+  } catch (error) {
+    console.error('Errore aggiunta prodotto:', error);
+    alert('Errore durante l\'aggiunta del prodotto: ' + error.message);
   }
 }

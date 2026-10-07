@@ -1,25 +1,27 @@
 // js/app.js
 
-if (typeof window.cart === 'undefined') {
-  window.cart = [];
-}
-var cart = window.cart;
+const RESTRICTED_VIEWS = Object.freeze(['cart', 'client-dashboard', 'supplier-dashboard', 'admin', 'chat']);
+const CART_STORAGE_KEY = 'sapori-piceni:cart:v1';
 
-// Viste accessibili solo agli utenti registrati e loggati
-const RESTRICTED_VIEWS = ['cart', 'client-dashboard', 'supplier-dashboard', 'admin', 'chat'];
+let cart = loadCart();
 
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', initApp);
+
+async function initApp() {
   setupNavToggle();
-  loadSiteSettings();
-  loadProducts();
+  setupProductActions();
+  setupDateConstraints();
+
+  await Promise.allSettled([
+    loadSiteSettings(),
+    loadProducts()
+  ]);
+
   await checkUserSession();
+  switchTab(currentProfile?.role === 'admin' ? 'admin' : 'home');
+  updateCartUI();
+}
 
-  // Un admin atterra sempre sulla propria dashboard, mai sulle pagine pubbliche
-  const role = currentProfile ? currentProfile.role : null;
-  switchTab(role === 'admin' ? 'admin' : 'home');
-});
-
-// MENU MOBILE (sostituisce bootstrap.Collapse)
 function setupNavToggle() {
   const toggle = document.getElementById('navToggle');
   const collapse = document.getElementById('mainNavCollapse');
@@ -28,171 +30,235 @@ function setupNavToggle() {
   toggle.addEventListener('click', () => {
     const isOpen = collapse.classList.toggle('open');
     toggle.classList.toggle('open', isOpen);
-    toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    toggle.setAttribute('aria-expanded', String(isOpen));
   });
 }
 
 function closeMobileNav() {
   const toggle = document.getElementById('navToggle');
   const collapse = document.getElementById('mainNavCollapse');
-  if (collapse && collapse.classList.contains('open')) {
-    collapse.classList.remove('open');
-    if (toggle) {
-      toggle.classList.remove('open');
-      toggle.setAttribute('aria-expanded', 'false');
-    }
-  }
+  collapse?.classList.remove('open');
+  toggle?.classList.remove('open');
+  toggle?.setAttribute('aria-expanded', 'false');
 }
 
-// CAMBIO SCHEDA / VISTA
+function setupDateConstraints() {
+  const input = document.getElementById('shipDate');
+  if (input) input.min = new Date().toISOString().slice(0, 10);
+}
+
 function switchTab(viewId) {
-  // Il carrello e le aree riservate sono accessibili solo a chi ha effettuato l'accesso
   if (RESTRICTED_VIEWS.includes(viewId) && !currentUser) {
     closeMobileNav();
     showAuthNotice('Devi accedere o registrarti per usare questa funzione.');
     return;
   }
 
-  // L'admin ha accesso solo alla propria dashboard: nessun'altra vista è raggiungibile
-  if (currentProfile && currentProfile.role === 'admin' && viewId !== 'admin') {
-    viewId = 'admin';
-  }
+  if (currentProfile?.role === 'admin' && viewId !== 'admin') viewId = 'admin';
 
-  document.querySelectorAll('.view-section').forEach(sec => {
-    sec.classList.remove('active');
+  const target = document.getElementById('view-' + viewId);
+  if (!target) return;
+
+  document.querySelectorAll('.view-section').forEach(section => {
+    section.classList.toggle('active', section === target);
   });
-
-  const targetSection = document.getElementById('view-' + viewId);
-  if (targetSection) {
-    targetSection.classList.add('active');
-  }
 
   document.querySelectorAll('#mainNav .nav-link').forEach(link => {
     link.classList.remove('active');
   });
-  const activeLink = document.getElementById('nav-' + viewId);
-  if (activeLink) {
-    activeLink.classList.add('active');
-  }
 
-  if (viewId === 'cart') updateCartUI();
-  if (viewId === 'client-dashboard') loadClientOrders();
-  if (viewId === 'supplier-dashboard') loadSupplierOffers();
-  if (viewId === 'admin') loadAdminData();
-  if (viewId === 'chat') loadChatMessages();
+  document.getElementById('nav-' + viewId)?.classList.add('active');
 
+  const loaders = {
+    cart: updateCartUI,
+    'client-dashboard': loadClientOrders,
+    'supplier-dashboard': loadSupplierOffers,
+    admin: loadAdminData,
+    chat: loadChatMessages
+  };
+
+  loaders[viewId]?.();
   closeMobileNav();
 }
 
-// INFORMAZIONI GENERALI DEL SITO (gestibili dall'admin, visibili a tutti)
 let siteSettings = null;
 
 async function fetchSiteSettings() {
-  try {
-    const { data, error } = await supabaseClient
-      .from('site_settings')
-      .select('*')
-      .eq('id', 1)
-      .single();
-    if (error) throw error;
-    siteSettings = data;
-    return data;
-  } catch (err) {
-    // Nessuna riga presente o tabella non ancora creata: si mantengono i testi predefiniti
+  const { data, error } = await supabaseClient
+    .from('site_settings')
+    .select('*')
+    .eq('id', 1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn('Impostazioni sito non disponibili:', error.message);
     return null;
   }
+
+  siteSettings = data || null;
+  return siteSettings;
 }
 
 async function loadSiteSettings() {
-  const s = await fetchSiteSettings();
-  if (!s) return;
+  const settings = await fetchSiteSettings();
+  if (!settings) return;
 
-  const setText = (id, val) => {
-    const el = document.getElementById(id);
-    if (el && val) el.textContent = val;
+  const fields = {
+    topBarAddress: settings.address,
+    contactAddress: settings.address,
+    contactEmail: settings.email,
+    contactPhone: settings.phone,
+    heroTitle: settings.hero_title,
+    heroLead: settings.hero_subtitle,
+    heroAwardText: settings.hero_award,
+    aboutP1: settings.about_p1,
+    aboutP2: settings.about_p2
   };
 
-  setText('topBarAddress', s.address);
-  setText('contactAddress', s.address);
-  setText('contactEmail', s.email);
-  setText('contactPhone', s.phone);
-  setText('heroTitle', s.hero_title);
-  setText('heroLead', s.hero_subtitle);
-  setText('heroAwardText', s.hero_award);
-  setText('aboutP1', s.about_p1);
-  setText('aboutP2', s.about_p2);
+  Object.entries(fields).forEach(([id, value]) => {
+    const element = document.getElementById(id);
+    if (element && value) element.textContent = value;
+  });
 }
 
-// CARICAMENTO PRODOTTI DA SUPABASE
+function formatCurrency(value) {
+  const amount = Number(value);
+  return new Intl.NumberFormat(APP_CONFIG.locale, {
+    style: 'currency',
+    currency: APP_CONFIG.currency
+  }).format(Number.isFinite(amount) ? amount : 0);
+}
+
+function parsePrice(value) {
+  const price = Number(value);
+  return Number.isFinite(price) && price >= 0 ? price : 0;
+}
+
+function loadCart() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || '[]');
+    if (!Array.isArray(stored)) return [];
+
+    return stored
+      .filter(item => item && item.id && item.name)
+      .map(item => ({
+        id: String(item.id),
+        name: String(item.name),
+        price: parsePrice(item.price),
+        qty: Math.min(Math.max(Number.parseInt(item.qty, 10) || 1, 1), APP_CONFIG.maxCartQuantity)
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function persistCart() {
+  try {
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+  } catch (error) {
+    console.warn('Impossibile salvare il carrello localmente:', error);
+  }
+}
+
 async function loadProducts() {
   const homeGrid = document.getElementById('homeProductGrid');
   const productGrid = document.getElementById('productGrid');
-  const loadingMsg = '<p class="muted">Caricamento prodotti...</p>';
+  const loading = '<p class="muted">Caricamento prodotti...</p>';
 
-  if (homeGrid) homeGrid.innerHTML = loadingMsg;
-  if (productGrid) productGrid.innerHTML = loadingMsg;
+  if (homeGrid) homeGrid.innerHTML = loading;
+  if (productGrid) productGrid.innerHTML = loading;
 
   try {
     const { data: products, error } = await supabaseClient
       .from('products')
-      .select('*');
+      .select('id,name,price,image_url,description')
+      .order('name', { ascending: true });
 
     if (error) throw error;
 
-    if (!products || products.length === 0) {
-      const emptyMsg = '<p class="muted">Nessun prodotto disponibile al momento.</p>';
-      if (homeGrid) homeGrid.innerHTML = emptyMsg;
-      if (productGrid) productGrid.innerHTML = emptyMsg;
+    if (!products?.length) {
+      const empty = '<p class="muted">Nessun prodotto disponibile al momento.</p>';
+      if (homeGrid) homeGrid.innerHTML = empty;
+      if (productGrid) productGrid.innerHTML = empty;
       return;
     }
 
-    let homeHTML = '';
-    let shopHTML = '';
+    const shopHtml = products.map(renderProductCard).join('');
+    const homeHtml = products.slice(0, 3).map(renderProductCard).join('');
 
-    products.forEach((p, index) => {
-      const cardHTML = `
-        <div class="product-card">
-          <img src="${p.image_url || 'https://placehold.co/300x200?text=Sapori+Piceni'}" alt="${escapeHtml(p.name)}" loading="lazy">
-          <div class="product-card__body">
-            <h5>${escapeHtml(p.name)}</h5>
-            <p class="product-card__desc">${escapeHtml(p.description || '')}</p>
-            <div class="product-card__footer">
-              <span class="product-card__price">€ ${parseFloat(p.price).toFixed(2)}</span>
-              <button class="btn btn-green btn-sm" onclick="addToCart('${p.id}', '${String(p.name).replace(/'/g, "\\'")}', ${p.price})">
-                <i class="fa-solid fa-cart-plus"></i> Aggiungi
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
-      shopHTML += cardHTML;
-      if (index < 3) homeHTML += cardHTML;
-    });
-
-    if (homeGrid) homeGrid.innerHTML = homeHTML;
-    if (productGrid) productGrid.innerHTML = shopHTML;
-
-  } catch (err) {
-    console.error('Errore durante il caricamento prodotti:', err);
-    const errorMsg = '<p class="muted">Errore nel caricamento dei prodotti.</p>';
-    if (homeGrid) homeGrid.innerHTML = errorMsg;
-    if (productGrid) productGrid.innerHTML = errorMsg;
+    if (homeGrid) homeGrid.innerHTML = homeHtml;
+    if (productGrid) productGrid.innerHTML = shopHtml;
+  } catch (error) {
+    console.error('Errore durante il caricamento prodotti:', error);
+    const message = '<p class="muted">Errore nel caricamento dei prodotti. Riprova più tardi.</p>';
+    if (homeGrid) homeGrid.innerHTML = message;
+    if (productGrid) productGrid.innerHTML = message;
   }
 }
 
-// GESTIONE CARRELLO (riservata agli utenti registrati e loggati)
-function addToCart(id, name, price) {
+function renderProductCard(product) {
+  const id = escapeHtml(product.id);
+  const price = parsePrice(product.price);
+
+  return `
+    <article class="product-card">
+      <img src="${safeHttpUrl(product.image_url)}" alt="${escapeHtml(product.name)}" loading="lazy" decoding="async">
+      <div class="product-card__body">
+        <h5>${escapeHtml(product.name)}</h5>
+        <p class="product-card__desc">${escapeHtml(product.description || '')}</p>
+        <div class="product-card__footer">
+          <span class="product-card__price">${formatCurrency(price)}</span>
+          <button type="button" class="btn btn-green btn-sm js-add-to-cart" data-product-id="${id}" aria-label="Aggiungi ${escapeHtml(product.name)} al carrello">
+            <i class="fa-solid fa-cart-plus" aria-hidden="true"></i> Aggiungi
+          </button>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function setupProductActions() {
+  document.addEventListener('click', event => {
+    const button = event.target.closest('.js-add-to-cart');
+    if (!button) return;
+
+    const id = button.dataset.productId;
+    if (!id) return;
+
+    addToCartById(id);
+  });
+}
+
+async function addToCartById(productId) {
   if (!currentUser) {
     showAuthNotice('Accedi o registrati per aggiungere prodotti al carrello.');
     return;
   }
 
-  const existingItem = cart.find(item => item.id === id);
-  if (existingItem) {
-    existingItem.qty += 1;
-  } else {
-    cart.push({ id, name, price: parseFloat(price), qty: 1 });
+  const { data: product, error } = await supabaseClient
+    .from('products')
+    .select('id,name,price')
+    .eq('id', productId)
+    .maybeSingle();
+
+  if (error || !product) {
+    alert('Il prodotto non è più disponibile.');
+    return;
   }
+
+  addToCart(product.id, product.name, parsePrice(product.price));
+}
+
+function addToCart(id, name, price) {
+  const existing = cart.find(item => String(item.id) === String(id));
+
+  if (existing) {
+    existing.qty = Math.min(existing.qty + 1, APP_CONFIG.maxCartQuantity);
+  } else {
+    cart.push({ id: String(id), name: String(name), price: parsePrice(price), qty: 1 });
+  }
+
+  persistCart();
   updateCartUI();
 }
 
@@ -201,227 +267,240 @@ function updateCartUI() {
   const cartItems = document.getElementById('cartItems');
   const cartTotal = document.getElementById('cartTotal');
 
-  let totalQty = 0;
-  let totalPrice = 0;
-  let itemsHTML = '';
+  const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
+  const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
-  cart.forEach((item, index) => {
-    totalQty += item.qty;
-    const itemTotal = item.price * item.qty;
-    totalPrice += itemTotal;
+  if (cartCnt) cartCnt.textContent = String(totalQty);
+  if (cartTotal) cartTotal.textContent = total.toFixed(2);
 
-    itemsHTML += `
+  if (!cartItems) return;
+
+  cartItems.innerHTML = cart.length
+    ? cart.map((item, index) => `
       <div class="cart-line">
         <div>
           <div class="cart-line__name">${escapeHtml(item.name)}</div>
-          <div class="cart-line__unit">€ ${item.price.toFixed(2)} x ${item.qty}</div>
+          <div class="cart-line__unit">${formatCurrency(item.price)} × ${item.qty}</div>
         </div>
         <div class="cart-line__right">
-          <span class="cart-line__total">€ ${itemTotal.toFixed(2)}</span>
-          <button class="btn btn-outline-danger" onclick="removeFromCart(${index})">&times;</button>
+          <span class="cart-line__total">${formatCurrency(item.price * item.qty)}</span>
+          <button type="button" class="btn btn-outline-danger" onclick="removeFromCart(${index})" aria-label="Rimuovi ${escapeHtml(item.name)}">&times;</button>
         </div>
       </div>
-    `;
-  });
-
-  if (cartCnt) cartCnt.innerText = totalQty;
-  if (cartTotal) cartTotal.innerText = totalPrice.toFixed(2);
-  if (cartItems) {
-    cartItems.innerHTML = cart.length > 0 ? itemsHTML : '<p class="muted mb-0">Il carrello è vuoto.</p>';
-  }
+    `).join('')
+    : '<p class="muted mb-0">Il carrello è vuoto.</p>';
 }
 
 function removeFromCart(index) {
+  if (!Number.isInteger(index) || index < 0 || index >= cart.length) return;
   cart.splice(index, 1);
+  persistCart();
   updateCartUI();
 }
 
 async function submitClientOrder(e) {
   e.preventDefault();
+
   if (!currentUser) {
     showAuthNotice('Devi accedere per completare un ordine.');
     return;
   }
-  if (cart.length === 0) {
-    alert('Il carrello è vuoto!');
+
+  if (!cart.length) {
+    alert('Il carrello è vuoto.');
     return;
   }
 
-  const address = document.getElementById('shipAddress').value;
-  const date = document.getElementById('shipDate').value;
-  const notes = document.getElementById('shipNotes').value;
-  const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  const address = document.getElementById('shipAddress')?.value.trim();
+  const date = document.getElementById('shipDate')?.value;
+  const notes = document.getElementById('shipNotes')?.value.trim() || '';
+
+  if (!address || !date) {
+    alert('Inserisci indirizzo e data di consegna.');
+    return;
+  }
+
+  const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const payload = {
+    user_id: currentUser.id,
+    items: cart.map(({ id, name, price, qty }) => ({ id, name, price, qty })),
+    total_price: Number(total.toFixed(2)),
+    shipping_address: address,
+    delivery_date: date,
+    notes,
+    status: 'In Attesa'
+  };
 
   try {
-    const { error } = await supabaseClient
-      .from('orders')
-      .insert([{
-        user_id: currentUser.id,
-        items: cart,
-        total_price: total,
-        shipping_address: address,
-        delivery_date: date,
-        notes: notes,
-        status: 'In Attesa'
-      }]);
-
+    const { error } = await supabaseClient.from('orders').insert([payload]);
     if (error) throw error;
 
     alert('Ordine inviato con successo!');
-    cart.length = 0;
+    cart = [];
+    persistCart();
     updateCartUI();
-    document.querySelector('#view-cart form').reset();
+    document.querySelector('#view-cart form')?.reset();
     switchTab('client-dashboard');
-  } catch (err) {
-    alert('Errore durante l\'invio dell\'ordine: ' + err.message);
+  } catch (error) {
+    console.error('Errore invio ordine:', error);
+    alert('Errore durante l\'invio dell\'ordine: ' + error.message);
   }
 }
 
-// AREA CLIENTE: elenco ordini personali
 async function loadClientOrders() {
-  const el = document.getElementById('clientOrdersList');
-  if (!el || !currentUser) return;
-  el.innerHTML = '<p class="muted">Caricamento ordini...</p>';
+  const element = document.getElementById('clientOrdersList');
+  if (!element || !currentUser) return;
+
+  element.innerHTML = '<p class="muted">Caricamento ordini...</p>';
 
   try {
     const { data: orders, error } = await supabaseClient
       .from('orders')
-      .select('*')
+      .select('id,created_at,shipping_address,delivery_date,status,total_price')
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
-    if (!orders || orders.length === 0) {
-      el.innerHTML = '<p class="muted">Non hai ancora effettuato ordini.</p>';
-      return;
-    }
-
-    el.innerHTML = orders.map(o => `
-      <div class="cart-line">
-        <div>
-          <div class="cart-line__name">${escapeHtml(o.shipping_address || '')}</div>
-          <div class="cart-line__unit">Consegna: ${o.delivery_date || '—'} · Stato: ${escapeHtml(o.status || 'In Attesa')}</div>
+    element.innerHTML = orders?.length
+      ? orders.map(order => `
+        <div class="cart-line">
+          <div>
+            <div class="cart-line__name">#${escapeHtml(String(order.id).slice(0, 8))} · ${escapeHtml(order.shipping_address || '')}</div>
+            <div class="cart-line__unit">Consegna: ${escapeHtml(order.delivery_date || '—')} · Stato: ${escapeHtml(order.status || 'In Attesa')}</div>
+          </div>
+          <div class="cart-line__total">${formatCurrency(order.total_price)}</div>
         </div>
-        <div class="cart-line__total">€ ${parseFloat(o.total_price || 0).toFixed(2)}</div>
-      </div>
-    `).join('');
-  } catch (err) {
-    el.innerHTML = '<p class="muted">Errore nel caricamento degli ordini.</p>';
-    console.error(err);
+      `).join('')
+      : '<p class="muted">Non hai ancora effettuato ordini.</p>';
+  } catch (error) {
+    console.error('Errore caricamento ordini cliente:', error);
+    element.innerHTML = '<p class="muted">Errore nel caricamento degli ordini.</p>';
   }
 }
 
-// AREA FORNITORE: invio e storico offerte
 async function submitSupplierOffer(e) {
   e.preventDefault();
   if (!currentUser) return;
 
-  const item = document.getElementById('supItem').value;
-  const qty = document.getElementById('supQty').value;
-  const price = parseFloat(document.getElementById('supPrice').value);
+  const item = document.getElementById('supItem')?.value.trim();
+  const quantity = document.getElementById('supQty')?.value.trim();
+  const price = Number(document.getElementById('supPrice')?.value);
+
+  if (!item || !quantity || !Number.isFinite(price) || price < 0) {
+    alert('Controlla materia prima, quantità e prezzo.');
+    return;
+  }
 
   try {
-    const { error } = await supabaseClient
-      .from('supplier_offers')
-      .insert([{
-        user_id: currentUser.id,
-        item_name: item,
-        quantity: qty,
-        price_total: price,
-        status: 'In Revisione'
-      }]);
+    const { error } = await supabaseClient.from('supplier_offers').insert([{
+      user_id: currentUser.id,
+      item_name: item,
+      quantity,
+      price_total: Number(price.toFixed(2)),
+      status: 'In Revisione'
+    }]);
+
     if (error) throw error;
 
     alert('Offerta inviata con successo!');
-    document.querySelector('#view-supplier-dashboard form').reset();
-    loadSupplierOffers();
-  } catch (err) {
-    alert('Errore durante l\'invio dell\'offerta: ' + err.message);
+    document.querySelector('#view-supplier-dashboard form')?.reset();
+    await loadSupplierOffers();
+  } catch (error) {
+    console.error('Errore invio offerta:', error);
+    alert('Errore durante l\'invio dell\'offerta: ' + error.message);
   }
 }
 
 async function loadSupplierOffers() {
-  const el = document.getElementById('supplierOffersList');
-  if (!el || !currentUser) return;
-  el.innerHTML = '<p class="muted">Caricamento offerte...</p>';
+  const element = document.getElementById('supplierOffersList');
+  if (!element || !currentUser) return;
+
+  element.innerHTML = '<p class="muted">Caricamento offerte...</p>';
 
   try {
     const { data: offers, error } = await supabaseClient
       .from('supplier_offers')
-      .select('*')
+      .select('id,created_at,item_name,quantity,price_total,status')
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
-    if (!offers || offers.length === 0) {
-      el.innerHTML = '<p class="muted">Non hai ancora inviato offerte.</p>';
-      return;
-    }
-
-    el.innerHTML = offers.map(o => `
-      <div class="cart-line">
-        <div>
-          <div class="cart-line__name">${escapeHtml(o.item_name)}</div>
-          <div class="cart-line__unit">${escapeHtml(o.quantity)} · Stato: ${escapeHtml(o.status || 'In Revisione')}</div>
+    element.innerHTML = offers?.length
+      ? offers.map(offer => `
+        <div class="cart-line">
+          <div>
+            <div class="cart-line__name">${escapeHtml(offer.item_name || '')}</div>
+            <div class="cart-line__unit">${escapeHtml(offer.quantity || '')} · Stato: ${escapeHtml(offer.status || 'In Revisione')}</div>
+          </div>
+          <div class="cart-line__total">${formatCurrency(offer.price_total)}</div>
         </div>
-        <div class="cart-line__total">€ ${parseFloat(o.price_total || 0).toFixed(2)}</div>
-      </div>
-    `).join('');
-  } catch (err) {
-    el.innerHTML = '<p class="muted">Errore nel caricamento delle offerte.</p>';
-    console.error(err);
+      `).join('')
+      : '<p class="muted">Non hai ancora inviato offerte.</p>';
+  } catch (error) {
+    console.error('Errore caricamento offerte:', error);
+    element.innerHTML = '<p class="muted">Errore nel caricamento delle offerte.</p>';
   }
 }
 
-// CHAT DI ASSISTENZA
 async function loadChatMessages() {
-  const el = document.getElementById('chatMessages');
-  if (!el || !currentUser) return;
+  const element = document.getElementById('chatMessages');
+  if (!element || !currentUser) return;
 
   try {
     const { data: messages, error } = await supabaseClient
       .from('chat_messages')
-      .select('*')
+      .select('id,created_at,sender,content')
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: true });
 
     if (error) throw error;
 
-    el.innerHTML = (messages && messages.length > 0)
+    element.innerHTML = messages?.length
       ? messages.map(renderChatMessage).join('')
       : '<div class="chat-msg chat-msg--system">Scrivi il tuo primo messaggio: il nostro staff ti risponderà al più presto.</div>';
-    el.scrollTop = el.scrollHeight;
-  } catch (err) {
-    el.innerHTML = '<div class="chat-msg chat-msg--system">Scrivi il tuo primo messaggio: il nostro staff ti risponderà al più presto.</div>';
+
+    element.scrollTop = element.scrollHeight;
+  } catch (error) {
+    console.error('Errore caricamento chat:', error);
+    element.innerHTML = '<div class="chat-msg chat-msg--system">Impossibile caricare la chat in questo momento.</div>';
   }
 }
 
-function renderChatMessage(m) {
-  const cls = m.sender === 'staff' ? 'chat-msg' : 'chat-msg chat-msg--me';
-  return `<div class="${cls}">${escapeHtml(m.content)}</div>`;
+function renderChatMessage(message) {
+  const mine = message.sender !== 'staff';
+  return `<div class="chat-msg${mine ? ' chat-msg--me' : ''}">${escapeHtml(message.content)}</div>`;
 }
 
 async function sendChatMessage(e) {
   e.preventDefault();
   if (!currentUser) return;
-  const input = document.getElementById('chatInput');
-  const text = input.value.trim();
-  if (!text) return;
 
-  const el = document.getElementById('chatMessages');
-  el.insertAdjacentHTML('beforeend', renderChatMessage({ sender: 'me', content: text }));
-  el.scrollTop = el.scrollHeight;
-  input.value = '';
+  const input = document.getElementById('chatInput');
+  const element = document.getElementById('chatMessages');
+  const message = input?.value.trim();
+
+  if (!input || !element || !message) return;
+
+  input.disabled = true;
 
   try {
-    await supabaseClient.from('chat_messages').insert([{
+    const { error } = await supabaseClient.from('chat_messages').insert([{
       user_id: currentUser.id,
       sender: 'me',
-      content: text
+      content: message
     }]);
-  } catch (err) {
-    console.warn('Messaggio non salvato sul server:', err.message);
+
+    if (error) throw error;
+
+    input.value = '';
+    await loadChatMessages();
+  } catch (error) {
+    console.error('Errore invio messaggio:', error);
+    alert('Messaggio non inviato: ' + error.message);
+  } finally {
+    input.disabled = false;
+    input.focus();
   }
 }
