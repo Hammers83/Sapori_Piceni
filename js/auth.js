@@ -225,9 +225,10 @@ async function handleRegister(e) {
 
     if (error) throw error;
 
-    if (data.user && data.session) {
-      // Manteniamo la compatibilità con il progetto attuale.
-      // In produzione è preferibile creare il profilo con un trigger server-side.
+    if (data.user) {
+      // Compatibilità con l'installazione attuale: il profilo viene creato
+      // anche quando Supabase richiede la conferma email e non esiste ancora una sessione.
+      // Per sicurezza definitiva, il ruolo va comunque vincolato da RLS/trigger lato database.
       const { error: profileError } = await supabaseClient.from('profiles').upsert([{
         id: data.user.id,
         full_name: fullName,
